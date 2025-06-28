@@ -2,7 +2,7 @@
 set -e
 
 KERNEL_DEFCONFIG=gki_defconfig
-CLANG_VERSION=clang-r547379
+CLANG_VERSION=clang-r563880
 
 OUT_DIR=out
 CLANG_DIR="$HOME/tools/google-clang"
@@ -39,7 +39,7 @@ setup_clang() {
     if ! [ -d "$CLANG_DIR" ]; then
         warn "Clang not found! Cloning..."
         mkdir -p "$CLANG_DIR"
-        if ! wget --show-progress -O "$CLANG_DIR/${CLANG_VERSION}.tar.gz" "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/${CLANG_VERSION}.tar.gz"; then
+        if ! wget --show-progress -O "$CLANG_DIR/${CLANG_VERSION}.tar.gz" "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/tags/ndk-r29-beta2/${CLANG_VERSION}.tar.gz"; then
             error "Cloning failed! Aborting..."
         fi
         info "Extracting the toolchain..."
