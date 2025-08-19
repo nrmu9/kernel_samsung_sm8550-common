@@ -1,71 +1,102 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-# (env-overridable)
-KERNEL_DEFCONFIG=${KERNEL_DEFCONFIG:-gki_defconfig}
-CLANG_VERSION=${CLANG_VERSION:-clang-r563880}
-OUT_DIR=${OUT_DIR:-out}
-CLANG_DIR=${CLANG_DIR:-"$HOME/tools/google-clang"}
+KERNEL_DEFCONFIG=gki_defconfig
+CLANG_VERSION=clang-r563880
+
+OUT_DIR=out
+CLANG_DIR="$HOME/tools/google-clang"
 CLANG_BINARY="$CLANG_DIR/bin/clang"
 START_TIME=$(date +%s)
 
-# --- pretty logs ---
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
-info(){ echo -e "${GREEN}[INFO]${NC} $*"; }
-warn(){ echo -e "${YELLOW}[WARN]${NC} $*"; }
-err(){  echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+    exit 1
+}
+
+usage() {
+    echo "Usage: $0 [clean]"
+    echo "  No arguments: Builds the kernel."
+    echo "  clean: Removes the build output directory."
+    exit 1
+}
 
 setup_clang() {
-  info "Checking for Clang ($CLANG_VERSION)..."
-  if [ ! -x "$CLANG_BINARY" ]; then
-    warn "Clang not found. Fetching..."
-    mkdir -p "$CLANG_DIR"
-    TARBALL="$(mktemp)"
-
-    URL_BASE="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive"
-    PRIMARY_URL="$URL_BASE/refs/heads/main/${CLANG_VERSION}.tar.gz"
-    ALT_URL="$URL_BASE/mirror-goog-main-llvm-toolchain-source/${CLANG_VERSION}.tar.gz"
-
-    if command -v wget >/dev/null 2>&1; then
-      DOWN_PRIMARY=(wget -q --show-progress -O "$TARBALL" "$PRIMARY_URL")
-      DOWN_ALT=(wget -q --show-progress -O "$TARBALL" "$ALT_URL")
-    elif command -v curl >/dev/null 2>&1; then
-      DOWN_PRIMARY=(curl -L --fail -o "$TARBALL" "$PRIMARY_URL")
-      DOWN_ALT=(curl -L --fail -o "$TARBALL" "$ALT_URL")
-    else
-      err "Need wget or curl to download the toolchain."
+    info "Checking for Clang toolchain..."
+    if ! [ -d "$CLANG_DIR" ]; then
+        warn "Clang not found! Cloning..."
+        mkdir -p "$CLANG_DIR"
+        if ! wget -q -O "$CLANG_DIR/${CLANG_VERSION}.tar.gz" "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/tags/ndk-r29-beta2/${CLANG_VERSION}.tar.gz"; then
+            error "Cloning failed! Aborting..."
+        fi
+        info "Extracting the toolchain..."
+        tar -xzf "$CLANG_DIR/${CLANG_VERSION}.tar.gz" -C "$CLANG_DIR"
+        rm "$CLANG_DIR/${CLANG_VERSION}.tar.gz"
     fi
-
-    if ! "${DOWN_PRIMARY[@]}"; then
-      warn "Primary URL failed, trying mirror path..."
-      "${DOWN_ALT[@]}" || err "Download failed from both URLs."
-    fi
-
-    info "Extracting toolchain..."
-    tar -xzf "$TARBALL" -C "$CLANG_DIR"
-    rm -f "$TARBALL"
-  fi
-
-  export PATH="$CLANG_DIR/bin:$PATH"
-  ver="$("$CLANG_BINARY" --version | head -n1)"
-  ver="$(echo "$ver" | sed -E 's/\(http[^)]*\)//g; s/[[:space:]]+/ /g; s/[[:space:]]+$//')"
-  export KBUILD_COMPILER_STRING="$ver"
+    info "Clang is ready."
+    export PATH="$CLANG_DIR/bin:$PATH"
+    export KBUILD_COMPILER_STRING="$($CLANG_BINARY --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')"
 }
 
 build_kernel() {
-  info "Starting kernel build..."
-  setup_clang
-  mkdir -p "$OUT_DIR"
+    info "Starting kernel build..."
+    setup_clang
 
-  make -j"$(nproc --all)" O="$OUT_DIR" ARCH=arm64 CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 \
-       "$KERNEL_DEFCONFIG" || err "defconfig failed"
+    if [ ! -d "$OUT_DIR" ]; then
+        info "Creating output directory: $OUT_DIR"
+        mkdir -p "$OUT_DIR"
+    fi
 
-  make -j"$(nproc --all)" O="$OUT_DIR" ARCH=arm64 CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 \
-       || err "build failed"
+    info "Generating .config file using $KERNEL_DEFCONFIG..."
+    make -j$(nproc --all) O=$OUT_DIR \
+                          ARCH=arm64 \
+                          CC=clang \
+                          LD=ld.lld \
+                          LLVM=1 \
+                          LLVM_IAS=1 \
+                          $KERNEL_DEFCONFIG || error "make defconfig failed."
 
-  total=$(( $(date +%s) - START_TIME ))
-  info "Build finished in $((total/60))m $((total%60))s."
+    info "Starting main build..."
+    make -j$(nproc --all) O=$OUT_DIR \
+                          ARCH=arm64 \
+                          CC=clang \
+                          LD=ld.lld \
+                          LLVM=1 \
+                          LLVM_IAS=1 || error "make build failed."
+
+    END_TIME=$(date +%s)
+    TOTAL_TIME=$((END_TIME - START_TIME))
+    info "Build finished successfully in $(($TOTAL_TIME / 60)) minutes and $(($TOTAL_TIME % 60)) seconds."
 }
 
-# Always build
-build_kernel
+clean_build() {
+    info "Cleaning build artifacts..."
+    if [ -d "$OUT_DIR" ]; then
+        rm -rf "$OUT_DIR"
+        info "Output directory removed."
+    else
+        warn "Output directory not found, nothing to clean."
+    fi
+}
+
+
+if [ "$1" == "clean" ]; then
+    clean_build
+elif [ -n "$1" ]; then
+    usage
+else
+    build_kernel
+fi
