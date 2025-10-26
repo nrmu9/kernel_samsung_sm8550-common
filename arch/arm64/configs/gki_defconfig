@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm64 5.15.193 Kernel Configuration
+# Linux/arm64 5.15.195 Kernel Configuration
 #
 CONFIG_CC_VERSION_TEXT="Android (13783749, +pgo, +bolt, +lto, +mlgo, based on r563880) clang version 21.0.0 (https://android.googlesource.com/toolchain/llvm-project 5e96669f06077099aa41290cdb4c5e6fa0f59349)"
 CONFIG_GCC_VERSION=0
@@ -3152,6 +3152,7 @@ CONFIG_THERMAL_EMULATION=y
 #
 # CONFIG_QCOM_SPMI_ADC_TM5 is not set
 # CONFIG_QCOM_SPMI_TEMP_ALARM is not set
+# CONFIG_QCOM_LMH is not set
 # end of Qualcomm thermal drivers
 
 CONFIG_WATCHDOG=y
