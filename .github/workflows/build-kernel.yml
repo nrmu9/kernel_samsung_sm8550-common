@@ -1,0 +1,95 @@
+name: Build Kernel
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        branch:
+          - android13-5.15-ksun-susfs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Clone kernel repository
+        run: |
+          git clone --depth=1 --single-branch --branch ${{ matrix.branch }} https://github.com/nrmu9/kernel_samsung_sm8550-common.git
+
+      - name: Cache kernel build
+        uses: actions/cache@v4
+        with:
+          path: |
+            kernel_samsung_sm8550-common/out
+            kernel_samsung_sm8550-common/.ccache
+          key: ${{ runner.os }}-kernel-${{ matrix.branch }}-${{ hashFiles('kernel_samsung_sm8550-common/build.config*', 'kernel_samsung_sm8550-common/Makefile', 'kernel_samsung_sm8550-common/arch/arm64/configs/**', 'kernel_samsung_sm8550-common/scripts/build.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-${{ matrix.branch }}-
+            ${{ runner.os }}-kernel-
+
+      - name: Set timezone
+        run: sudo timedatectl set-timezone Europe/Warsaw
+        continue-on-error: true
+
+      - name: Setup dependencies
+        run: |
+          sudo apt update
+          sudo apt upgrade -y
+          sudo apt install -y \
+            bc bison build-essential ccache curl flex \
+            g++-multilib gcc-multilib git git-lfs gnupg \
+            gperf imagemagick lib32readline-dev lib32z1-dev \
+            libelf-dev liblz4-tool libsdl1.2-dev libssl-dev \
+            libxml2 libxml2-utils lzop pngcrush rsync \
+            schedtool squashfs-tools xsltproc zip zlib1g-dev \
+            openjdk-11-jdk pahole dwarves cpio python3 \
+            python-is-python3 tar perl wget lz4 make
+
+      - name: Setup swap space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 16
+
+      - name: Download AnyKernel3 zip
+        run: |
+          wget -q https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/AnyKernel3/AnyKernel3.zip
+
+      - name: Build kernel
+        run: |
+          cd kernel_samsung_sm8550-common
+          git submodule update --init --recursive
+          git config user.name "nigger"
+          git config user.email "nigger@nigger.sex"
+          
+          # Setup ccache for faster compilation
+          export USE_CCACHE=1
+          export CCACHE_DIR=$(pwd)/.ccache
+          ccache -M 2G
+          
+          echo "KERNEL_VERSION=$(make kernelversion | awk '/^[0-9]/ {print $1}')" >> $GITHUB_ENV
+          echo "KSUNEXT_VERSION_GITHUB=$(curl -sI "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/commits?sha=next&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p')" >> $GITHUB_ENV
+          
+          KSUNEXT_VERSION_GITHUB=$(curl -sI "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/commits?sha=next&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p')
+          echo "KSUNEXT_VERSION=$(expr $KSUNEXT_VERSION_GITHUB + 10200)" >> $GITHUB_ENV
+          
+          echo "SUSFS_VERSION=$(cat ./include/linux/susfs.h | grep -E '^#define SUSFS_VERSION' | cut -d' ' -f3 | sed 's/"//g' | sed 's/^v//')" >> $GITHUB_ENV
+          
+          echo "Building kernel..."
+          ./scripts/build.sh
+
+      - name: Package the kernel
+        run: |
+          unzip AnyKernel3.zip -d AnyKernel3/
+          cp kernel_samsung_sm8550-common/out/arch/arm64/boot/Image.gz AnyKernel3/
+          echo "=== AnyKernel3 contents ==="
+          ls -la AnyKernel3/
+
+      - name: Upload kernel zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: common-${{ env.KERNEL_VERSION }}-ksunext${{ env.KSUNEXT_VERSION }}-susfs${{ env.SUSFS_VERSION }}-full
+          path: AnyKernel3/*

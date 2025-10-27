@@ -27,11 +27,11 @@ setup_clang() {
     ALT_URL="$URL_BASE/mirror-goog-main-llvm-toolchain-source/${CLANG_VERSION}.tar.gz"
 
     if command -v wget >/dev/null 2>&1; then
-      DOWN_PRIMARY=(wget -q --show-progress -O "$TARBALL" "$PRIMARY_URL")
-      DOWN_ALT=(wget -q --show-progress -O "$TARBALL" "$ALT_URL")
+      DOWN_PRIMARY=(wget -q -O "$TARBALL" "$PRIMARY_URL")
+      DOWN_ALT=(wget -q -O "$TARBALL" "$ALT_URL")
     elif command -v curl >/dev/null 2>&1; then
-      DOWN_PRIMARY=(curl -L --fail -o "$TARBALL" "$PRIMARY_URL")
-      DOWN_ALT=(curl -L --fail -o "$TARBALL" "$ALT_URL")
+      DOWN_PRIMARY=(curl -L -s --fail -o "$TARBALL" "$PRIMARY_URL")
+      DOWN_ALT=(curl -L -s --fail -o "$TARBALL" "$ALT_URL")
     else
       err "Need wget or curl to download the toolchain."
     fi

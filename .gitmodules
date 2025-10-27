@@ -1,0 +1,7 @@
+[submodule "KernelSU-Next"]
+	path = KernelSU-Next
+	url = https://github.com/nrmu9/KernelSU-Next.git
+[submodule "susfs4ksu"]
+	path = susfs4ksu
+	url = https://gitlab.com/simonpunk/susfs4ksu.git
+	branch = gki-android13-5.15
