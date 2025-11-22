@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm64 5.15.195 Kernel Configuration
+# Linux/arm64 5.15.196 Kernel Configuration
 #
 CONFIG_CC_VERSION_TEXT="Android (13783749, +pgo, +bolt, +lto, +mlgo, based on r563880) clang version 21.0.0 (https://android.googlesource.com/toolchain/llvm-project 5e96669f06077099aa41290cdb4c5e6fa0f59349)"
 CONFIG_GCC_VERSION=0
@@ -17,7 +17,7 @@ CONFIG_CC_HAS_ASM_GOTO_TIED_OUTPUT=y
 CONFIG_TOOLS_SUPPORT_RELR=y
 CONFIG_CC_HAS_ASM_INLINE=y
 CONFIG_CC_HAS_NO_PROFILE_FN_ATTR=y
-CONFIG_PAHOLE_VERSION=130
+CONFIG_PAHOLE_VERSION=131
 CONFIG_IRQ_WORK=y
 CONFIG_BUILDTIME_TABLE_SORT=y
 CONFIG_THREAD_INFO_IN_TASK=y
