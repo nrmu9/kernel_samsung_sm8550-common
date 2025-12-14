@@ -54,9 +54,11 @@ jobs:
         with:
           swap-size-gb: 16
 
-      - name: Download AnyKernel3 zip
+      - name: Download AnyKernel3 zip and patch_linux
         run: |
           wget -q https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/AnyKernel3/AnyKernel3.zip
+          wget -q https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/patch_linux/patch_linux
+          chmod +x patch_linux
 
       - name: Build kernel
         run: |
@@ -95,8 +97,55 @@ jobs:
           echo "=== AnyKernel3 contents ==="
           ls -la AnyKernel3/
 
+      - name: Create KPM-patched kernel
+        run: |
+          set -e
+          TEMP_DIR=$(mktemp -d)
+          
+          echo "[*] Working in temp directory: $TEMP_DIR"
+          
+          # Copy Image.gz to temp dir
+          cp AnyKernel3/Image.gz "$TEMP_DIR/"
+          
+          # Decompress Image.gz to Image
+          echo "[*] Decompressing Image.gz..."
+          gunzip -k "$TEMP_DIR/Image.gz"
+          
+          # Run patch_linux on Image
+          echo "[*] Running patch_linux..."
+          cd "$TEMP_DIR"
+          "$GITHUB_WORKSPACE/patch_linux" Image
+          
+          # Replace Image with patched oImage
+          echo "[*] Replacing Image with patched oImage..."
+          rm Image
+          mv oImage Image
+          
+          # Compress Image back to Image.gz
+          echo "[*] Compressing Image to Image.gz..."
+          rm Image.gz
+          gzip -k Image
+          
+          # Create KPM AnyKernel3 directory
+          cd "$GITHUB_WORKSPACE"
+          cp -r AnyKernel3 AnyKernel3-kpm
+          cp "$TEMP_DIR/Image.gz" AnyKernel3-kpm/
+          
+          echo "=== AnyKernel3-kpm contents ==="
+          ls -la AnyKernel3-kpm/
+          
+          # Cleanup
+          rm -rf "$TEMP_DIR"
+          echo "[+] KPM patching done!"
+
       - name: Upload kernel zip
         uses: actions/upload-artifact@v4
         with:
           name: common-${{ env.KERNEL_VERSION }}-sukisu${{ env.KSU_VERSION }}-full
           path: AnyKernel3/*
+
+      - name: Upload KPM-patched kernel zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: common-${{ env.KERNEL_VERSION }}-sukisu${{ env.KSU_VERSION }}-kpm-full
+          path: AnyKernel3-kpm/*
