@@ -57,8 +57,17 @@ jobs:
       - name: Download AnyKernel3 zip and patch_linux
         run: |
           wget -q https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/AnyKernel3/AnyKernel3.zip
-          wget -q https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/patch_linux/patch_linux
+          # patch_linux is the Linux runner binary we need.
+          # Prefer the GitHub "latest" release, fallback to a known version.
+          set -euo pipefail
+          PATCH_RELEASE_BASE="https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases"
+
+          if ! curl -fL -o patch_linux "$PATCH_RELEASE_BASE/latest/download/patch_linux"; then
+            curl -fL -o patch_linux "$PATCH_RELEASE_BASE/download/0.12.5/patch_linux"
+          fi
+
           chmod +x patch_linux
+          echo "PATCH_LINUX=$GITHUB_WORKSPACE/patch_linux" >> $GITHUB_ENV
 
       - name: Build kernel
         run: |
@@ -114,7 +123,7 @@ jobs:
           # Run patch_linux on Image
           echo "[*] Running patch_linux..."
           cd "$TEMP_DIR"
-          "$GITHUB_WORKSPACE/patch_linux" Image
+          "${PATCH_LINUX:-$GITHUB_WORKSPACE/patch_linux}" Image
           
           # Replace Image with patched oImage
           echo "[*] Replacing Image with patched oImage..."
