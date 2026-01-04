@@ -80,6 +80,9 @@ jobs:
           export USE_CCACHE=1
           export CCACHE_DIR=$(pwd)/.ccache
           ccache -M 2G
+
+          export KBUILD_BUILD_HOST=nrmu
+          export KBUILD_BUILD_USER=nrmu9
           
           KERNEL_VERSION=$(make kernelversion | awk '/^[0-9]/ {print $1}' | tr -d '()')
           echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
