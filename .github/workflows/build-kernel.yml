@@ -57,7 +57,7 @@ jobs:
       - name: Download AnyKernel3 zip and patch_linux
         run: |
           wget -q https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/AnyKernel3/AnyKernel3.zip
-          wget -q https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/patch_linux/patch_linux
+          wget -q https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/patch_linux-0.13.0/patch_linux
           chmod +x patch_linux
 
       - name: Build kernel
