@@ -269,7 +269,7 @@ static ssize_t encoding_show(struct f2fs_attr *a,
 			(sb->s_encoding->version >> 8) & 0xff,
 			sb->s_encoding->version & 0xff);
 #endif
-	return sprintf(buf, "(none)");
+	return sysfs_emit(buf, "(none)\n");
 }
 
 static ssize_t encoding_flags_show(struct f2fs_attr *a,
