@@ -144,11 +144,11 @@ jobs:
       - name: Upload kernel zip
         uses: actions/upload-artifact@v4
         with:
-          name: common-${{ env.KERNEL_VERSION }}-sukisu${{ env.KSU_VERSION }}-full
+          name: common-${{ env.KERNEL_VERSION }}-resukisu${{ env.KSU_VERSION }}-full
           path: AnyKernel3/*
 
       - name: Upload KPM-patched kernel zip
         uses: actions/upload-artifact@v4
         with:
-          name: common-${{ env.KERNEL_VERSION }}-sukisu${{ env.KSU_VERSION }}-kpm-full
+          name: common-${{ env.KERNEL_VERSION }}-resukisu${{ env.KSU_VERSION }}-kpm-full
           path: AnyKernel3-kpm/*
