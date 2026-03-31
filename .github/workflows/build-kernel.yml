@@ -1,0 +1,236 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Kernel branch to build
+        required: true
+        default: android13-5.15-resukisu
+      ksu_dir:
+        description: ReSukiSU directory in repository
+        required: true
+        default: KernelSU
+      anykernel_zip_url:
+        description: AnyKernel3 zip URL
+        required: true
+        default: https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/AnyKernel3/AnyKernel3.zip
+      patch_linux_url:
+        description: patch_linux binary URL
+        required: true
+        default: https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/patch_linux-0.13.0/patch_linux
+      swap_size_gb:
+        description: Swap size in GB (set 0 to disable)
+        required: true
+        default: "16"
+      artifact_retention_days:
+        description: Artifact retention days
+        required: true
+        default: "14"
+      enable_kpm:
+        description: Build KPM-patched package
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: build-kernel-${{ github.workflow }}-${{ inputs.branch }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TZ: Europe/Warsaw
+  CCACHE_MAX_SIZE: 5G
+  REPO_NAME: ReSukiSU
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Cache ccache
+        uses: actions/cache@v5
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-ccache-${{ inputs.branch }}-${{ hashFiles('build.config*', 'Makefile', 'arch/arm64/configs/**', 'scripts/build.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-${{ inputs.branch }}-
+            ${{ runner.os }}-ccache-
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ccache curl flex git git-lfs \
+            libelf-dev libssl-dev lz4 pahole perl python-is-python3 \
+            python3 rsync tar unzip wget zip zstd
+          ccache --version
+
+      - name: Configure swap space
+        if: ${{ inputs.swap_size_gb != '0' }}
+        run: |
+          set -euo pipefail
+          sudo swapoff -a || true
+          sudo rm -f /swapfile
+          sudo fallocate -l "${{ inputs.swap_size_gb }}G" /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
+      - name: Download packaging tools
+        run: |
+          set -euo pipefail
+          curl -fsSL "${{ inputs.anykernel_zip_url }}" -o AnyKernel3.zip
+          curl -fsSL "${{ inputs.patch_linux_url }}" -o patch_linux
+          chmod +x patch_linux
+
+      - name: Configure ccache and kernel metadata
+        env:
+          USE_CCACHE: "1"
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          KBUILD_BUILD_HOST: github-actions
+          KBUILD_BUILD_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          ccache --set-config=max_size="${CCACHE_MAX_SIZE}"
+
+          echo "USE_CCACHE=${USE_CCACHE}" >> "$GITHUB_ENV"
+          echo "CCACHE_DIR=${CCACHE_DIR}" >> "$GITHUB_ENV"
+          echo "KBUILD_BUILD_HOST=${KBUILD_BUILD_HOST}" >> "$GITHUB_ENV"
+          echo "KBUILD_BUILD_USER=${KBUILD_BUILD_USER}" >> "$GITHUB_ENV"
+
+          KERNEL_VERSION="$(make kernelversion | awk '/^[0-9]/ {print $1}' | tr -d '()')"
+          echo "KERNEL_VERSION=${KERNEL_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Resolve ReSukiSU version metadata
+        run: |
+          set -euo pipefail
+          KSU_DIR="${{ inputs.ksu_dir }}"
+
+          if [[ ! -d "${KSU_DIR}" ]]; then
+            echo "::error::KSU directory not found: ${KSU_DIR}"
+            exit 1
+          fi
+
+          if [[ ! -d "${KSU_DIR}/.git" && ! -f "${KSU_DIR}/.git" ]]; then
+            echo "::error::${KSU_DIR} is not a git repository (expected ReSukiSU checkout/submodule)."
+            exit 1
+          fi
+
+          if git -C "${KSU_DIR}" rev-parse --is-shallow-repository | grep -q true; then
+            git -C "${KSU_DIR}" fetch --unshallow --tags --force
+          else
+            git -C "${KSU_DIR}" fetch --tags --force
+          fi
+
+          KSU_LOCAL_VERSION="$(git -C "${KSU_DIR}" rev-list --count HEAD)"
+          KSU_VERSION="$((30000 + KSU_LOCAL_VERSION + 700))"
+          KSU_TAG_NAME="$(git -C "${KSU_DIR}" describe --abbrev=0 --tags 2>/dev/null || echo v4.1.0)"
+          KSU_COMMIT_SHA="$(git -C "${KSU_DIR}" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)"
+          KSU_BRANCH_NAME="$(git -C "${KSU_DIR}" branch --show-current 2>/dev/null || echo detached)"
+          KSU_VERSION_FULL="${KSU_TAG_NAME}-${KSU_COMMIT_SHA}@${REPO_NAME}"
+          KSU_TAG_SAFE="$(echo "${KSU_TAG_NAME}" | tr '/ ' '--' | tr -cd '[:alnum:]._-')"
+
+          echo "KSU_LOCAL_VERSION=${KSU_LOCAL_VERSION}" >> "$GITHUB_ENV"
+          echo "KSU_VERSION=${KSU_VERSION}" >> "$GITHUB_ENV"
+          echo "KSU_TAG_NAME=${KSU_TAG_NAME}" >> "$GITHUB_ENV"
+          echo "KSU_COMMIT_SHA=${KSU_COMMIT_SHA}" >> "$GITHUB_ENV"
+          echo "KSU_BRANCH_NAME=${KSU_BRANCH_NAME}" >> "$GITHUB_ENV"
+          echo "KSU_VERSION_FULL=${KSU_VERSION_FULL}" >> "$GITHUB_ENV"
+          echo "ARTIFACT_BASE=common-${KERNEL_VERSION}-resukisu${KSU_VERSION}-${KSU_TAG_SAFE}-${KSU_COMMIT_SHA}" >> "$GITHUB_ENV"
+
+          {
+            echo "### Build Version Metadata"
+            echo "- Kernel version: ${KERNEL_VERSION}"
+            echo "- ReSukiSU commit count: ${KSU_LOCAL_VERSION}"
+            echo "- ReSukiSU version code: ${KSU_VERSION}"
+            echo "- ReSukiSU version name: ${KSU_VERSION_FULL}"
+            echo "- ReSukiSU branch: ${KSU_BRANCH_NAME}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build kernel
+        run: |
+          set -euo pipefail
+
+          ./scripts/build.sh
+
+      - name: Prepare packaging directory
+        run: |
+          set -euo pipefail
+          rm -rf AnyKernel3 AnyKernel3-kpm dist
+          mkdir -p AnyKernel3 dist
+          unzip -q AnyKernel3.zip -d AnyKernel3
+
+      - name: Create full AnyKernel package
+        run: |
+          set -euo pipefail
+          cp out/arch/arm64/boot/Image.gz AnyKernel3/
+
+          (
+            cd AnyKernel3
+            zip -qr "../dist/${ARTIFACT_BASE}-full.zip" .
+          )
+
+      - name: Patch kernel image for KPM
+        if: ${{ inputs.enable_kpm }}
+        run: |
+          set -euo pipefail
+          temp_dir="$(mktemp -d)"
+          cp AnyKernel3/Image.gz "${temp_dir}/"
+
+          gunzip -k "${temp_dir}/Image.gz"
+          (
+            cd "${temp_dir}"
+            "${GITHUB_WORKSPACE}/patch_linux" Image
+            rm -f Image
+            mv oImage Image
+            rm -f Image.gz
+            gzip -k Image
+          )
+
+          cp -r AnyKernel3 AnyKernel3-kpm
+          cp "${temp_dir}/Image.gz" AnyKernel3-kpm/
+
+          rm -rf "${temp_dir}"
+
+      - name: Create KPM AnyKernel package
+        if: ${{ inputs.enable_kpm }}
+        run: |
+          set -euo pipefail
+          (
+            cd AnyKernel3-kpm
+            zip -qr "../dist/${ARTIFACT_BASE}-kpm-full.zip" .
+          )
+
+      - name: Upload kernel package
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.ARTIFACT_BASE }}-full
+          path: dist/${{ env.ARTIFACT_BASE }}-full.zip
+          if-no-files-found: error
+          retention-days: ${{ fromJSON(inputs.artifact_retention_days) }}
+
+      - name: Upload KPM-patched package
+        if: ${{ inputs.enable_kpm }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.ARTIFACT_BASE }}-kpm-full
+          path: dist/${{ env.ARTIFACT_BASE }}-kpm-full.zip
+          if-no-files-found: error
+          retention-days: ${{ fromJSON(inputs.artifact_retention_days) }}
