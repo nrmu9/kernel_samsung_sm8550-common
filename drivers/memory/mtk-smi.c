@@ -375,13 +375,14 @@ static int mtk_smi_larb_probe(struct platform_device *pdev)
 	return component_add(dev, &mtk_smi_larb_component_ops);
 }
 
-static void mtk_smi_larb_remove(struct platform_device *pdev)
+static int mtk_smi_larb_remove(struct platform_device *pdev)
 {
 	struct mtk_smi_larb *larb = platform_get_drvdata(pdev);
 
 	device_link_remove(&pdev->dev, larb->smi_common_dev);
 	pm_runtime_disable(&pdev->dev);
 	component_del(&pdev->dev, &mtk_smi_larb_component_ops);
+	return 0;
 }
 
 static int __maybe_unused mtk_smi_larb_resume(struct device *dev)
@@ -418,7 +419,7 @@ static const struct dev_pm_ops smi_larb_pm_ops = {
 
 static struct platform_driver mtk_smi_larb_driver = {
 	.probe	= mtk_smi_larb_probe,
-	.remove_new = mtk_smi_larb_remove,
+	.remove	= mtk_smi_larb_remove,
 	.driver	= {
 		.name = "mtk-smi-larb",
 		.of_match_table = mtk_smi_larb_of_ids,
@@ -548,9 +549,10 @@ static int mtk_smi_common_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static void mtk_smi_common_remove(struct platform_device *pdev)
+static int mtk_smi_common_remove(struct platform_device *pdev)
 {
 	pm_runtime_disable(&pdev->dev);
+	return 0;
 }
 
 static int __maybe_unused mtk_smi_common_resume(struct device *dev)
@@ -586,7 +588,7 @@ static const struct dev_pm_ops smi_common_pm_ops = {
 
 static struct platform_driver mtk_smi_common_driver = {
 	.probe	= mtk_smi_common_probe,
-	.remove_new = mtk_smi_common_remove,
+	.remove = mtk_smi_common_remove,
 	.driver	= {
 		.name = "mtk-smi-common",
 		.of_match_table = mtk_smi_common_of_ids,
