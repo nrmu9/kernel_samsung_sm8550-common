@@ -55,9 +55,9 @@ setup_clang() {
 
     URL_BASE="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive"
     URLS=(
+      "$URL_BASE/mirror-goog-main-llvm-toolchain-source/${CLANG_VERSION}.tar.gz"
       "$URL_BASE/refs/heads/main/${CLANG_VERSION}.tar.gz"
       "$URL_BASE/refs/heads/master/${CLANG_VERSION}.tar.gz"
-      "$URL_BASE/mirror-goog-main-llvm-toolchain-source/${CLANG_VERSION}.tar.gz"
     )
 
     downloaded=0
