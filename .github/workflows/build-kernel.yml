@@ -15,10 +15,6 @@ on:
         description: AnyKernel3 zip URL
         required: true
         default: https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/AnyKernel3/AnyKernel3.zip
-      patch_linux_url:
-        description: patch_linux binary URL
-        required: true
-        default: https://github.com/nrmu9/kernel_samsung_sm8550-common/releases/download/patch_linux-0.13.0/patch_linux
       swap_size_gb:
         description: Swap size in GB (set 0 to disable)
         required: true
@@ -26,12 +22,7 @@ on:
       artifact_retention_days:
         description: Artifact retention days
         required: true
-        default: "14"
-      enable_kpm:
-        description: Build KPM-patched package
-        required: true
-        type: boolean
-        default: true
+        default: "90"
 
 concurrency:
   group: build-kernel-${{ github.workflow }}-${{ inputs.branch }}
@@ -97,9 +88,6 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL "${{ inputs.anykernel_zip_url }}" -o AnyKernel3.zip
-          curl -fsSL "${{ inputs.patch_linux_url }}" -o patch_linux
-          chmod +x patch_linux
-
       - name: Configure ccache and kernel metadata
         env:
           USE_CCACHE: "1"
@@ -173,7 +161,7 @@ jobs:
       - name: Prepare packaging directory
         run: |
           set -euo pipefail
-          rm -rf AnyKernel3 AnyKernel3-kpm dist
+          rm -rf AnyKernel3 dist
           mkdir -p AnyKernel3 dist
           unzip -q AnyKernel3.zip -d AnyKernel3
 
@@ -187,50 +175,10 @@ jobs:
             zip -qr "../dist/${ARTIFACT_BASE}-full.zip" .
           )
 
-      - name: Patch kernel image for KPM
-        if: ${{ inputs.enable_kpm }}
-        run: |
-          set -euo pipefail
-          temp_dir="$(mktemp -d)"
-          cp AnyKernel3/Image.gz "${temp_dir}/"
-
-          gunzip -k "${temp_dir}/Image.gz"
-          (
-            cd "${temp_dir}"
-            "${GITHUB_WORKSPACE}/patch_linux" Image
-            rm -f Image
-            mv oImage Image
-            rm -f Image.gz
-            gzip -k Image
-          )
-
-          cp -r AnyKernel3 AnyKernel3-kpm
-          cp "${temp_dir}/Image.gz" AnyKernel3-kpm/
-
-          rm -rf "${temp_dir}"
-
-      - name: Create KPM AnyKernel package
-        if: ${{ inputs.enable_kpm }}
-        run: |
-          set -euo pipefail
-          (
-            cd AnyKernel3-kpm
-            zip -qr "../dist/${ARTIFACT_BASE}-kpm-full.zip" .
-          )
-
       - name: Upload kernel package
         uses: actions/upload-artifact@v6
         with:
           name: ${{ env.ARTIFACT_BASE }}-full
           path: dist/${{ env.ARTIFACT_BASE }}-full.zip
-          if-no-files-found: error
-          retention-days: ${{ fromJSON(inputs.artifact_retention_days) }}
-
-      - name: Upload KPM-patched package
-        if: ${{ inputs.enable_kpm }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ env.ARTIFACT_BASE }}-kpm-full
-          path: dist/${{ env.ARTIFACT_BASE }}-kpm-full.zip
           if-no-files-found: error
           retention-days: ${{ fromJSON(inputs.artifact_retention_days) }}
