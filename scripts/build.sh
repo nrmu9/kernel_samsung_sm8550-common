@@ -3,7 +3,7 @@ set -euo pipefail
 
 # (env-overridable)
 KERNEL_DEFCONFIG=${KERNEL_DEFCONFIG:-gki_defconfig}
-CLANG_VERSION=${CLANG_VERSION:-clang-r584948}
+CLANG_VERSION=${CLANG_VERSION:-clang-r614150}
 OUT_DIR=${OUT_DIR:-out}
 CLANG_DIR=${CLANG_DIR:-"$HOME/tools/google-clang"}
 CLANG_BINARY="$CLANG_DIR/bin/clang"
@@ -25,7 +25,7 @@ setup_clang() {
         --retry 5 \
         --retry-delay 2 \
         --connect-timeout 20 \
-        --max-time 1200 \
+        --max-time 3600 \
         -o "$output" \
         "$url"
     elif command -v wget >/dev/null 2>&1; then

@@ -53,8 +53,16 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
-      - name: Cache ccache
-        uses: actions/cache@v5
+      - name: Restore Clang toolchain cache
+        id: clang-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/tools/google-clang
+          key: ${{ runner.os }}-clang-${{ hashFiles('scripts/build.sh') }}
+
+      - name: Restore ccache
+        id: ccache-cache
+        uses: actions/cache/restore@v5
         with:
           path: .ccache
           key: ${{ runner.os }}-ccache-${{ inputs.branch }}-${{ hashFiles('build.config*', 'Makefile', 'arch/arm64/configs/**', 'scripts/build.sh') }}
@@ -177,3 +185,17 @@ jobs:
           path: AnyKernel3/
           if-no-files-found: error
           retention-days: ${{ fromJSON(inputs.artifact_retention_days) }}
+
+      - name: Save Clang toolchain cache
+        if: always() && steps.clang-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/tools/google-clang
+          key: ${{ runner.os }}-clang-${{ hashFiles('scripts/build.sh') }}
+
+      - name: Save ccache
+        if: always() && steps.ccache-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-ccache-${{ inputs.branch }}-${{ hashFiles('build.config*', 'Makefile', 'arch/arm64/configs/**', 'scripts/build.sh') }}
